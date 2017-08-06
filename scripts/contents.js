@@ -45,19 +45,33 @@ var Content = {
 
         var $placeholder = ""
 + "●入力例\n"
-+ "1	通常	9:00	18:00	1:00	0:00	0:00	備考です\n"
-+ "2,備考です。,9:00,18:00,1:00,0:00,0:00,通常\n"
-+ "3,11:30,20:00,遅刻早退\n"
++ "# tsv\n"
++ "5	通常	9:00	18:00	1:00	0:00	0:00	備考です\n"
++ "\n"
++ "# csv\n"
++ "7,備考です。,9:00,18:00,1:00,0:00,0:00,通常\n"
++ "8,11:30,20:00,遅刻早退\n"
 + "20,有給\n"
 + "21,9:00,18:00\n"
 ;
 
         var $textArea = $('<textarea>').attr({
             id:     'input-area',
-            rows:  20,
-            cols:  65,
+            rows:   20,
+            cols:   65,
             placeholder: $placeholder
         });
+        var $chkBox = $('<input>').attr({
+            id:     'defaultFlag',
+            type:   'checkbox',
+            value:  '1',
+            checked:'checked',
+        });
+        var $chkLabel = $('<label>').attr({
+            id:    'label-defaultFlag',
+            for:   'defaultFlag',
+            style: 'font-size: 12px'
+        }).html('未入力項目は「チェック反映用基本データ」をセット (チェック中の日付のみが対象)');
         var $execBtn = $('<button>').attr({id: 'modal-loadBtn'}).text('load');
 
         $closeBtn = $('<a>').attr({
@@ -67,6 +81,8 @@ var Content = {
 
         $modalDiv
             .append($description)
+            .append($chkBox)
+            .append($chkLabel)
             .append($('<div>').attr({style: 'text-align: center;'}).append($textArea).append($('<div>').append($execBtn)))
             .append($closeBtn);
         $('body').append($modalDiv);
@@ -199,6 +215,11 @@ var Content = {
         if (biko !== '') {
             resultHash['biko'+day] = biko;
         }
+
+        // チェック反映用基本データを反映する（平日のみ）
+        if($("#defaultFlag:checked").val() && $('input[name=chk'+day+']:checked').val()) {
+            resultHash = this.setDefaultVal(day, resultHash);
+        }
         return resultHash;
     },
     // 休日フラグと一致する文字列かを判定する
@@ -210,6 +231,28 @@ var Content = {
             }
         }
         return false;
+    },
+    // 未入力項目に「チェック反映用基本データ」を反映
+    setDefaultVal: function(day, resultHash) {
+        // 休日フラグ
+        if (('sel'+day in resultHash) === false) {
+            resultHash['sel'+day] = $('select[name=selAll]').val();
+        }
+
+        // 始業
+        if (('start'+day in resultHash) === false) {
+            resultHash['start'+day] = $('input[name=startAll]').val();
+        }
+
+        var itemList = ['start', 'end', 'teiji', 'sinya', 'sinyanai'];
+        $.each(itemList, function(i, item) {
+            if ((item + day in resultHash) === false) {
+                resultHash[item + day] = $('input[name='+item+'All]').val();
+            }
+        });
+
+
+        return resultHash;
     },
     // フォームの要素に値を反映する
     reflectToForm: function(formValueList) {
