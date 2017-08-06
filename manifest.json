@@ -1,0 +1,26 @@
+{
+    "manifest_version": 2,
+    "name": "勤怠らくらくコピペー",
+    "version": "1.0",
+    "description": "Excelの内容(tsv,csv)をコピペーで入力が可能になるツールです。",
+    "browser_action": {
+        "default_icon": {
+            "19": "images/icon19.png"
+        }
+    },
+    "content_scripts": [
+        {
+            "matches": ["http://*.co.jp/kintai/te.php"],
+            "css": ["css/modal.css"],
+            "js": ["lib/jquery-3.2.1.min.js", "scripts/contents.js"]
+        }
+    ],
+    "icons": {
+        "16": "images/icon16.png",
+        "48": "images/icon48.png",
+        "128": "images/icon128.png"
+    },
+    "permissions": [
+        "http://*/kintai/te.php"
+    ]
+}
