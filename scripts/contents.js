@@ -71,7 +71,10 @@ var Content = {
             id:    'label-defaultFlag',
             for:   'defaultFlag',
             style: 'font-size: 12px'
-        }).html('未入力項目は「チェック反映用基本データ」をセット (チェック中の日付のみが対象)');
+        }).html(
+            '未入力項目は「チェック反映用基本データ」をセット<br>'
+          + '　　(チェックされた日、且つ「通常」「遅刻早退」「半休」時のみ対象)'
+        );
         var $execBtn = $('<button>').attr({id: 'modal-loadBtn'}).text('load');
 
         $closeBtn = $('<a>').attr({
@@ -220,6 +223,7 @@ var Content = {
         if($("#defaultFlag:checked").val() && $('input[name=chk'+day+']:checked').val()) {
             resultHash = this.setDefaultVal(day, resultHash);
         }
+
         return resultHash;
     },
     // 休日フラグと一致する文字列かを判定する
@@ -232,6 +236,13 @@ var Content = {
         }
         return false;
     },
+    // 時間欄に「チェック反映用基本データ」を反映して良いか判定する
+    isSetDefaultTime:function(selVal) {
+        if ($.inArray(selVal, ['通常','遅刻早退','半休']) == -1) {
+            return false;
+        }
+        return true;
+    },
     // 未入力項目に「チェック反映用基本データ」を反映
     setDefaultVal: function(day, resultHash) {
         // 休日フラグ
@@ -239,18 +250,14 @@ var Content = {
             resultHash['sel'+day] = $('select[name=selAll]').val();
         }
 
-        // 始業
-        if (('start'+day in resultHash) === false) {
-            resultHash['start'+day] = $('input[name=startAll]').val();
+        if (this.isSetDefaultTime(resultHash['sel'+day])) {
+            var itemList = ['start', 'end', 'teiji', 'sinya', 'sinyanai'];
+            $.each(itemList, function(i, item) {
+                if ((item + day in resultHash) === false) {
+                    resultHash[item + day] = $('input[name='+item+'All]').val();
+                }
+            });
         }
-
-        var itemList = ['start', 'end', 'teiji', 'sinya', 'sinyanai'];
-        $.each(itemList, function(i, item) {
-            if ((item + day in resultHash) === false) {
-                resultHash[item + day] = $('input[name='+item+'All]').val();
-            }
-        });
-
 
         return resultHash;
     },
