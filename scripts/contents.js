@@ -1,5 +1,6 @@
 $(function(){
     $(document).ready(function(){
+        Content.initYyyymmStr();
         Content.addImportBtn();
         Content.addModalPage();
     });
@@ -18,7 +19,18 @@ $(function(){
     });
 });
 
+var YyyymmStr;
+
 var Content = {
+    // タイトルの「XXXX さん　yyyy年mm月勤怠管理」文字列から年月を取得する
+    initYyyymmStr: function(){
+        var str = $("h3.we-title").text();
+        var index = str.indexOf('さん');
+        str = str.slice(index + 3);
+        year = str.substring(0, 4);
+        month = str.substring(5, 7);
+        YyyymmStr = year + month;
+    },
     addImportBtn: function(){
         var $btnP = $('<span>').html('&nbsp;&nbsp;&nbsp;');
         var $btnA = $('<a>').attr({
@@ -26,8 +38,7 @@ var Content = {
             class: 'button-link'
         }).text('インポート').appendTo($btnP);
 
-        $('[type="button"][value="再計算"]').after($btnP);
-
+        $("#register_report").after($btnP);
 
     },
     // モダル画面を生成
@@ -39,20 +50,20 @@ var Content = {
         var $description = $('<p>').html(
                 'Excelの勤務表（tsv, csv）をここに貼り付けて、取り込むことができます。<br>'
               + '１番目項目：日付（１～３１の半角数字を入力）<br>'
-              + '２番目～　：休日フラグ、始業、終業など<br>'
+              + '２番目～　：勤務区分、始業時刻、終業時刻など<br>'
               + '区切り文字：タブ、カンマ'
         );
 
         var $placeholder = ""
 + "●入力例\n"
 + "# tsv\n"
-+ "5	通常	9:00	18:00	1:00	0:00	0:00	備考です\n"
++ "5	通常	09:00	18:00	01:00	00:00	00:00	備考です\n"
 + "\n"
 + "# csv\n"
-+ "7,備考です。,9:00,18:00,1:00,0:00,0:00,通常\n"
-+ "8,11:30,20:00,遅刻早退\n"
++ "9,09:00,18:00\n"
++ "10,備考です。,9:00,18:00,01:00,00:00,00:00,通常\n"
++ "11,11:30,20:00,遅刻早退\n"
 + "20,有給\n"
-+ "21,9:00,18:00\n"
 ;
 
         var $textArea = $('<textarea>').attr({
@@ -72,8 +83,7 @@ var Content = {
             for:   'defaultFlag',
             style: 'font-size: 12px'
         }).html(
-            '未入力項目は「チェック反映用基本データ」をセット<br>'
-          + '　　(チェックされた日、且つ「通常」「遅刻早退」「半休」時のみ対象)'
+            '未入力項目は設定中の「定時（開始）」「定時（終了）」「休憩時間」をセット'
         );
         var $execBtn = $('<button>').attr({id: 'modal-loadBtn'}).text('load');
 
@@ -164,99 +174,124 @@ var Content = {
             return line;
         }
 
-        // 0:start(始業), 1:end(終業), 2:teiji(定時内休憩), 3:sinya(定時後休憩), 4:sinyanai(深夜休憩)
+        // 0:start_time(始業), 1:end_time(終業), 2:on_time_break(定時内休憩), 3:non_scheduled_break(定時後休憩（深夜外）), 4:midnight_break(定時後休憩（深夜内）)
         var timeIndex = 0;
         var resultHash = {};
         var cols = line.split(/\t|,/);
 
-        if(isNaN(cols[0]) || cols[0] <= 0 || cols[0] > 31 || ! $(':text[name="start'+cols[0]+'"]').length){
+        var day = cols[0].length == 1 ? '0'+cols[0] : cols[0];
+        var biko = '';
+
+        if(isNaN(day) || ! $(':text[name='+YyyymmStr+day+'\\[start_time\\]]').length){
             return '#error:' + line + '   //１番目の項目は有効な日ではありません。' + "\n";
         }
-
-        var day = cols[0];
-        var biko = '';
 
         // 2番目の項目からループ
         for(var i=1;i<cols.length;i++){
             colVal =  jQuery.trim(cols[i]);
             if (colVal == '') { continue; }
 
+            // 時間形式の文字列の場合
             if (colVal.match(/^[0-9]{1,2}:[0-9]{1,2}$/)) {
                 switch (timeIndex){
                     case 0:
-                        resultHash['start'+day] = colVal;
+                        resultHash[YyyymmStr+day+'\\[start_time\\]'] = colVal;
                         break;
                     case 1:
-                        resultHash['end'+day] = colVal;
+                        resultHash[YyyymmStr+day+'\\[end_time\\]'] = colVal;
                         break;
                     case 2:
-                        resultHash['teiji'+day] = colVal;
+                        resultHash[YyyymmStr+day+'\\[on_time_break\\]'] = colVal;
                         break;
                     case 3:
-                        resultHash['sinya'+day] = colVal;
+                        resultHash[YyyymmStr+day+'\\[non_scheduled_break\\]'] = colVal;
                         break;
                     case 4:
-                        resultHash['sinyanai'+day] = colVal;
+                        resultHash[YyyymmStr+day+'\\[midnight_break\\]'] = colVal;
                         break;
                     default:
-                        // ５項目目からは無視
+                        // ５項目以降は無視
                         break;
                 }
                 timeIndex++;
                 continue;
             }
 
-            if (this.isMatchSel(colVal, day)) {
-                resultHash['sel'+day] = colVal;
+            // 勤務区分の要素の場合
+            var selVal = this.getSelValue(colVal, day);
+            if (selVal !== '') {
+                resultHash[YyyymmStr+day+'\\[mst_work_kbn_id\\]'] = selVal;
                 continue;
             }
 
-            // 時間、休日フラグともなければ、備考の扱い
+            // 時間、勤務区分ともなければ、備考の扱い
             biko += colVal;
         }
 
         if (biko !== '') {
-            resultHash['biko'+day] = biko;
+            resultHash[YyyymmStr+day+'\\[remarks\\]'] = biko;
         }
 
+
         // チェック反映用基本データを反映する（平日のみ）
-        if($("#defaultFlag:checked").val() && $('input[name=chk'+day+']:checked').val()) {
+        if($("#defaultFlag:checked").val() && this.isWeekday(day)) {
             resultHash = this.setDefaultVal(day, resultHash);
         }
 
         return resultHash;
     },
-    // 休日フラグと一致する文字列かを判定する
-    isMatchSel: function(colVal, day) {
-        var obj = $('select[name=sel'+day+']').children();
+    // 勤務区分の value を取得
+    getSelValue: function(colVal, day) {
+        var obj = $('select[name='+YyyymmStr+day+'\\[mst_work_kbn_id\\]]').children();
         for( var i=0; i<obj.length; i++ ){
-            if (obj.eq(i).val() === colVal) {
-                return true;
+            if (jQuery.trim(obj.eq(i).text()) === colVal) {
+                return obj.eq(i).val();
             }
         }
-        return false;
+        return '';
     },
-    // 時間欄に「チェック反映用基本データ」を反映して良いか判定する
-    isSetDefaultTime:function(selVal) {
-        if ($.inArray(selVal, ['通常','遅刻早退','半休']) == -1) {
+    // <tr>要素の class を元に平日かを判定する
+    isWeekday:function(day) {
+        $tr = $(':text[name='+YyyymmStr+day+'\\[start_time\\]]').parents('tr');
+        var tr_class = jQuery.trim($tr.attr("class"));
+        if(tr_class == 'info' || tr_class == 'danger') {
             return false;
         }
         return true;
     },
-    // 未入力項目に「チェック反映用基本データ」を反映
+    // 時間欄に「チェック反映用基本データ」を反映して良いか判定する
+    isSetDefaultTime:function(selVal) {
+        // 勤務区分が '通常','遅刻早退','半休' 以外の場合
+        if ($.inArray(selVal, ['1','2','5']) == -1) {
+            return false;
+        }
+        return true;
+    },
+    // 未入力項目に設定中の「定時（開始）」「定時（終了）」「休憩時間」を反映、「定時後休憩（深夜外）」「定時後休憩（深夜内）」には 00:00 をセット
     setDefaultVal: function(day, resultHash) {
-        // 休日フラグ
-        if (('sel'+day in resultHash) === false) {
-            resultHash['sel'+day] = $('select[name=selAll]').val();
+        // 勤務区分が未入力の場合
+        if ((YyyymmStr+day+'\\[mst_work_kbn_id\\]' in resultHash) === false) {
+            // "1:通常"をセットする
+            resultHash[YyyymmStr+day+'\\[mst_work_kbn_id\\]'] = '1';
         }
 
-        if (this.isSetDefaultTime(resultHash['sel'+day])) {
-            var itemList = ['start', 'end', 'teiji', 'sinya', 'sinyanai'];
-            $.each(itemList, function(i, item) {
-                if ((item + day in resultHash) === false) {
-                    resultHash[item + day] = $('input[name='+item+'All]').val();
-                }
-            });
+        if (this.isSetDefaultTime(resultHash[YyyymmStr+day+'\\[mst_work_kbn_id\\]'])) {
+
+            if ((YyyymmStr+day+'\\[start_time\\]' in resultHash) === false) {
+                resultHash[YyyymmStr+day+'\\[start_time\\]'] = $('input[name=regular_start_time]').val();
+            }
+            if ((YyyymmStr+day+'\\[end_time\\]' in resultHash) === false) {
+                resultHash[YyyymmStr+day+'\\[end_time\\]'] = $('input[name=regular_end_time]').val();
+            }
+            if ((YyyymmStr+day+'\\[on_time_break\\]' in resultHash) === false) {
+                resultHash[YyyymmStr+day+'\\[on_time_break\\]'] = $('input[name=regular_break_time]').val();
+            }
+            if ((YyyymmStr+day+'\\[non_scheduled_break\\]' in resultHash) === false) {
+                resultHash[YyyymmStr+day+'\\[non_scheduled_break\\]'] = '00:00';
+            }
+            if ((YyyymmStr+day+'\\[midnight_break\\]' in resultHash) === false) {
+                resultHash[YyyymmStr+day+'\\[midnight_break\\]'] = '00:00';
+            }
         }
 
         return resultHash;
@@ -267,7 +302,7 @@ var Content = {
             var row = formValueList[i];
 
             $.each( row, function( key, value ) {
-                if (key.match(/^sel[0-9]{1,2}$/)) {
+                if (key.match(/mst_work_kbn_id/)) {
                     $('select[name='+key+']').val(value);
 
                     // 画面表示用文言(obj.text())に一致する要素の値(obj.var())を選択する
@@ -283,6 +318,6 @@ var Content = {
             });
         }
         // 反映後合計時間を再計算する
-        $('input[value=再計算]').click();
+        //$('input[value=再計算]').click();
     }
 };
