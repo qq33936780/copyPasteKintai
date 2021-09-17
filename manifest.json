@@ -1,8 +1,8 @@
 {
     "manifest_version": 2,
-    "name": "勤怠らくらくコピペー",
-    "version": "1.0.3",
-    "description": "Excelの内容(tsv,csv)をコピペーで入力が可能になるツールです。",
+    "name": "勤怠コピペ",
+    "version": "2.0.0",
+    "description": "Excelの内容(tsv,csv)をコピペで入力が可能になるツールです。",
     "browser_action": {
         "default_icon": {
             "19": "images/icon19.png"
@@ -10,7 +10,7 @@
     },
     "content_scripts": [
         {
-            "matches": ["http://*.co.jp/kintai/te.php", "https://*.co.jp/kintai/te.php"],
+            "matches": ["http://*.co.jp/technology/groupware/public/WorkReports/edit*", "https://*.co.jp/technology/groupware/public/WorkReports/edit*"],
             "css": ["css/modal.css"],
             "js": ["lib/jquery-3.2.1.min.js", "scripts/contents.js"]
         }
@@ -21,6 +21,6 @@
         "128": "images/icon128.png"
     },
     "permissions": [
-        "http://*/kintai/te.php"
+        "http://*/technology/groupware/public/WorkReports/edit*"
     ]
 }
